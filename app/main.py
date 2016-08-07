@@ -23,6 +23,11 @@ Summary Notes:
 
 from datetime import timedelta, datetime, time, date
 from collections import deque
+import pandas as pd
+import logging
+
+logging_filename = "logs/app.log"
+logging.basicConfig(filename=logging_filename, level=logging.DEBUG)
 
 #Just a handy tool for making random objects
 class Bunch:
@@ -157,27 +162,19 @@ def assign_blocks(task,calendar,start):
 	# if not empty, we assume this has already been run; haven't handled re-running appropriately so we will instead throw an error
 	if len(task.blocks) > 0:
 		raise Exception("task.blocks already populated - don't want to duplicate the blocks")
-	
-	#TODO log warning if start date is earlier than task.start. But, allow behavior and require caller to use start appropriately.
-
 
 	for d in calendar.days:
 		print(d.datestamp)
 
 		#Go to the next day if it's not the start date
 		if d.datestamp < start:
-			print("continuing")
 			continue
 
-		print("calculating")
 		while hours_to_assign > hours_assigned:
 			#Just fill the available hours in the day, unless today is the deadline. On the deadline we can overbook the day.
 			if d.hours_free() >= block_size or task.end.date() <= d.datestamp:
 				b = Block(start=datetime.combine(d.datestamp, time(9,0)), duration=block_size, task=task, portion=portion)		
 				hours_assigned += b.duration
-				
-				print("portion: {}".format(portion))
-
 				portion += 1
 
 				task.blocks.append(b)
@@ -186,15 +183,10 @@ def assign_blocks(task,calendar,start):
 				break #assign the hours to the next day
 
 		if hours_assigned >= hours_to_assign:
-			break #no need to look at the rest of the days
+			break #no need to look at the rest of the days if everything is assigned
 
 
 	#handle error - ran out of days in calendar (should add a list at the end of the calendar)
-
-
-
-
-
 
 # Takes a list of tasks and sorts the list so that they can be passed through the assign_blocks routine
 # 	Priority:
@@ -225,22 +217,64 @@ def load_tasks(data):
 
 	return tasks
 
-def create_calendar(data, start):
-	pass
+def create_calendar(data_path, start, end):
 	#parse the data to get date and available hours
 	#make a list of ordered days starting with start (a date)
 	#if start is not in the data, throw error
 	#if there are any gaps in the data, create filler days with working_hours = 0
 
+	#data validation
+	if isinstance(start, date) is False or isinstance(end, date) is False:
+		raise ValueError('start and end must be of the type datetime.date')
+	if start > end:
+		raise ValueError('start must be before end')
+	if isinstance(data_path,str) is False: 
+		raise ValueError('data_path must be a string')
 
-	#for now just make a sample calendar to use
+	#Read calendar info into a pandas dataframe
+	calendar_data = pd.read_csv(data_path,parse_dates=['date'])
+	calendar_sorted = calendar_data.sort_values(by='date')
+	#convert from a Pandas Timestamp to a datetime.date() object for consistency with the rest of the time objects
+	calendar_sorted['date'] = [date.date() for date in calendar_sorted['date']]
+ 	
+ 	#Calendar object is returned by the function
 	calendar = Calendar()
-	calendar.days = create_week_september_5()
 
-	#some extra sample code
-	day = Day(datestamp=date(2016,9,12), working_hours=8)
-	calendar.days.append(day)
+	#Create Day objects and append them to the Calendar.days[]
+	for row in calendar_sorted.itertuples():
+		if row.date < start or row.date > end:
+			continue
 
+		#Append sufficient 'filler' days if there is a gap in the calendar file. Assume 0 working hours if day is not listed.
+		if len(calendar.days) == 0:
+			yesterday = None 
+		else:
+			yesterday = calendar.days[-1].datestamp
+		if yesterday:
+			currentDate = yesterday + timedelta(days=1)
+			while currentDate < row.date:
+				day = Day(datestamp=currentDate, working_hours=0)
+				calendar.days.append(day)
+				currentDate = currentDate + timedelta(days=1)
+				logging.info("Adding filler day {}".format(calendar.days[-1]))
+
+		#Append the date from the data file
+		day = Day(datestamp=row.date, working_hours=row.working_hours)
+		calendar.days.append(day)
+
+	#Check some stats to make sure the calendar is as expected
+	if len(calendar.days) == 0:
+		raise ValueError("No dates added - check that start and end dates are in the data source")
+	if calendar.days[-1].datestamp != end:
+		raise ValueError("Last date does not match end date - check that data source has sufficient data for the time period selected")
+
+
+	#Show the calendar in the log file
+	logging.info("Calendar generated ({} days included)".format(len(calendar.days)))
+	logging.info("First 10 days of calendar:")
+	for i in range(min(10,len(calendar.days))):
+		logging.info(calendar.days[i])
+	
 	return calendar
                                                                                                                        
 ########################
@@ -261,10 +295,11 @@ def create_week_september_5():
 
 #########################
 def sample():
-
+	logging.info('------------------------')
+	logging.info('Starting sample() module')
 	print('-----------')
 
-	cal = create_calendar(1,1)
+	cal = create_calendar('data/calendar.csv',date(2016,9,5),date(2016,10,11))
 	print(cal)
 	tasks = load_tasks('nodata')
 	tasks = prioritize_tasks(tasks,cal)
@@ -278,7 +313,19 @@ def sample():
 	print("Overbooked time: {}".format(cal.overbooked_time(date(2016,9,6),date(2016,9,7))))
 
 	return cal
-	
+
+def slice_calendar(calendar, start, end):
+
+	sliced_calendar = Calendar()
+
+	for d in calendar.days:
+		if d.datestamp >= start and d.datestamp <= end:
+			sliced_calendar.days.append(d)
+
+	return sliced_calendar
+
+
+print(__name__)
 if __name__ == '__main__':
 	sample()
 

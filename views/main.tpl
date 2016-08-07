@@ -28,25 +28,30 @@
 	  		<!--If you might not have a variable value, you need to check for it or Bottle will crash.-->
 	  		<!--other methods - get('variable', 'default_value') and (pagewide) setdefault ('variable', 'defaultValue')-->
 	  		%if defined('calendar'):
-	  			%start = calendar.days[0].datestamp
-	  			%end = calendar.days[-1].datestamp
+	  			%if len(calendar.days) == 0:
+	  				<p>No days available</p>
+	  			%else:
+		  			%start = calendar.days[0].datestamp
+		  			%end = calendar.days[-1].datestamp
 
-	  			<p>Calendar: {{calendar}}</p>
-	  			<p>From {{start}} to {{end}}</p>
-	  			<p>Hours free: {{calendar.potential_time(start,end)}}</p>
-	  			<p>Hours overbooked: {{calendar.overbooked_time(start,end)}}</p>
+		  			<p>Calendar: {{calendar}}</p>
+		  			<p>From {{start}} to {{end}}</p>
+		  			<p>Hours free: {{calendar.potential_time(start,end)}}</p>
+		  			<p>Hours overbooked: {{calendar.overbooked_time(start,end)}}</p>
 
 
-	  			%for day in calendar.days:
-	  				<div> {{day.datestamp}}. Working: {{day.working_hours}}, Free: {{day.hours_free()}}, Booked: {{day.hours_booked()}}</div>
-	  				<ul>
-	  					%for block in day.blocks:
-	  						<li> {{block.task.name}}: portion {{block.portion}}, time: {{block.start}}</li>
-	  					%end
+		  			%for day in calendar.days:
+		  				<div> {{day.datestamp}}. Working: {{day.working_hours}}, Free: {{day.hours_free()}}, Booked: {{day.hours_booked()}}</div>
+		  				<ul>
+		  					%for block in day.blocks:
+		  						<li> {{block.task.name}}: portion {{block.portion}}, time: {{block.start}}</li>
+		  					%end
 
-	  				</ul>
+		  				</ul>
+
+	  				%end
+	  				  				
 	  			%end
-
 	  		%else:
 	  			<p>Variable not found</p>
 	  		%end

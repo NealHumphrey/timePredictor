@@ -3,7 +3,8 @@
 
 #Import the stuff we need first:
 from bottle import route, run, template, view, debug
-from app.main import sample
+from app.main import sample, slice_calendar
+from datetime import datetime
 #Obviously you can import other modules here.
 
 
@@ -17,6 +18,12 @@ def main():
 	return template('main', calendar=sample_calendar) 
 
 
+@route('/<start>/<end>')
+def sliced(start,end):
+	start = datetime.strptime(start, '%Y%m%d').date()
+	end = datetime.strptime(end, '%Y%m%d').date()
+	sliced_calendar = slice_calendar(sample_calendar,start,end)
+	return template('main', calendar=sliced_calendar)
 
 #Examples:
 #The most simple version
