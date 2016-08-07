@@ -8,9 +8,9 @@ Summary Notes:
 	Calendar then can be sent to the view.
 
 	Current status:
-	-create_calendar and load_tasks both just create dummy data - need to load from a file
+	-load_tasks correctly pulls from Google Sheets, but need to parse the date
+	
 	-prioritize tasks not yet implemented
-	-need to load start/end dates from the URL dynamically (i.e. run_website needs to call a function with two date arguments)
 	-Nothing in the view is implemented yet - just a text output
 	-Times are not dealt with at all (but they are stored for blocks and tasks)
 
@@ -21,11 +21,15 @@ Summary Notes:
 
 
 
+
 from datetime import timedelta, datetime, time, date
-from collections import deque
+from collections import deque #not used currently?
 import pandas as pd
 import logging
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
+#Configure logging
 logging_filename = "logs/app.log"
 logging.basicConfig(filename=logging_filename, level=logging.DEBUG)
 
@@ -150,7 +154,7 @@ class Calendar(object):
 #	calendar: an ordered list of Day objects
 #	start: 
 def assign_blocks(task,calendar,start):
-	print("Entering task {}".format(task.name))
+	logging.info("Assigning task {}".format(task.name))
 
 	block_size = 1 #hour(s)
 	hours_to_assign = task.hours_needed - task.hours_done
@@ -164,8 +168,6 @@ def assign_blocks(task,calendar,start):
 		raise Exception("task.blocks already populated - don't want to duplicate the blocks")
 
 	for d in calendar.days:
-		print(d.datestamp)
-
 		#Go to the next day if it's not the start date
 		if d.datestamp < start:
 			continue
@@ -186,6 +188,8 @@ def assign_blocks(task,calendar,start):
 			break #no need to look at the rest of the days if everything is assigned
 
 
+	logging.info("{} portions created".format(portion-1))
+
 	#handle error - ran out of days in calendar (should add a list at the end of the calendar)
 
 # Takes a list of tasks and sorts the list so that they can be passed through the assign_blocks routine
@@ -198,22 +202,61 @@ def assign_blocks(task,calendar,start):
 #		2) end - if time constrained is the same, do the one with the earliest deadline first
 #		3) start - finally, do the one with earliest start date first. 
 def prioritize_tasks(tasks, calendar):
-	print("Potential time: {}".format(calendar.potential_time(date(2016,9,6),date(2016,9,7))))
-
 	return tasks
 
 #Returns a list of tasks loaded from a data source (CSV file)
 #this will need to load the data from the CSV or other file
 #TODO only sample data creation for now
 def load_tasks(data):
-	sample_task = Task(name='My Task', start = datetime(2016,9,6,9,30), end = datetime(2016,9,8,10,30), hours_needed=15, hours_done=0, completed=False, project='Test Project', notes='no notes')
-	tasks = [sample_task]
+	
 
-	second_task = Task(name='Second Task', start = datetime(2016,9,7,9,30), end = datetime(2016,9,7,10,30), hours_needed=9, hours_done=0, completed=False, project='Test Project', notes='my note')
-	tasks.append(second_task)
+	#Configure Google Sheets credentials
+	scope = ['https://spreadsheets.google.com/feeds']
+	credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
 
-	specific_task = Task(name="Specific",start=datetime(2016,9,7,13,0),end=datetime(2016,9,7,14,0),hours_needed=1)
-	tasks.insert(0,specific_task)
+	gc = gspread.authorize(credentials)
+
+	sheetbook = gc.open_by_key('1q7F6Ie2ZGBZ7OsogyHQjMTrHsK27E473zEwRgAfWaEg')
+
+	worksheets = sheetbook.worksheets() #a list of all worksheets in a spreadsheet
+	worksheet = sheetbook.get_worksheet(0) #get worksheet by index number
+	worksheet_count = worksheet.row_count
+	worksheet_headers = worksheet.row_values(1) #returns list of values in a row
+	worksheet_values = worksheet.get_all_values()
+
+	row_index = 1
+	tasks = []
+	for row in worksheet_values:
+		#figure out how to parse dates
+		print('date: {}'.format(row[1]))
+
+
+		if row_index == 1:
+			row_index += 1
+			continue #skip the headers
+		task = Task(name = str(row[0]), 
+					start = datetime(2016,9,6,9,30), 		#TODO need to convert to datetime format (parse string)
+					end = datetime(2016,9,8,10,30),
+					hours_needed = float(row[3]), 
+					hours_done = float(row[4]), 
+					completed = bool(row[5]), 
+					project = str(row[6]), 
+					notes = str(row[7]))
+		
+		tasks.append(task)
+		row_index += 1
+
+
+
+
+	#sample_task = Task(name='My Task', start = datetime(2016,9,6,9,30), end = datetime(2016,9,8,10,30), hours_needed=15, hours_done=0, completed=False, project='Test Project', notes='no notes')
+	#tasks = [sample_task]
+
+	#second_task = Task(name='Second Task', start = datetime(2016,9,7,9,30), end = datetime(2016,9,7,10,30), hours_needed=9, hours_done=0, completed=False, project='Test Project', notes='my note')
+	#tasks.append(second_task)
+
+	#specific_task = Task(name="Specific",start=datetime(2016,9,7,13,0),end=datetime(2016,9,7,14,0),hours_needed=1)
+	#tasks.insert(0,specific_task)
 
 	return tasks
 
