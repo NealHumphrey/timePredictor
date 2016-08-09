@@ -12,16 +12,18 @@ from datetime import datetime
 sample_calendar = sample()
 
 
-#An alternative definition method that allows you to return a dictionary
 @route('/sample')
-def main():
+def sample():
 	return template('main', calendar=sample_calendar) 
 
+@route('/')
+def main():
+	return template('main') 
 
 @route('/<start>/<end>')
 def sliced(start,end):
-	start = datetime.strptime(start, '%Y%m%d').date()
-	end = datetime.strptime(end, '%Y%m%d').date()
+	start = datetime.strptime(start, '%Y-%m-%d').date()
+	end = datetime.strptime(end, '%Y-%m-%d').date()
 	sliced_calendar = slice_calendar(sample_calendar,start,end)
 	return template('main', calendar=sliced_calendar)
 

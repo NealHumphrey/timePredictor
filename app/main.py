@@ -24,6 +24,8 @@ Summary Notes:
 
 from datetime import timedelta, datetime, time, date
 from collections import deque #not used currently?
+from operator import attrgetter
+from ast import literal_eval
 import pandas as pd
 import logging
 import gspread
@@ -33,15 +35,32 @@ from oauth2client.service_account import ServiceAccountCredentials
 logging_filename = "logs/app.log"
 logging.basicConfig(filename=logging_filename, level=logging.DEBUG)
 
+####
+#Utility functions
+####
 #Just a handy tool for making random objects
 class Bunch:
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
 
+def str_to_bool(s):
+    if s.lower() == 'true':
+         return True
+    elif s.lower() == 'false':
+         return False
+    else:
+        logging.warning("Couldn't parse string '{}' properly. Returning False.".format(s))
+        return False
+
 
 
 def ex():
 	return 2
+
+
+####
+#Classes used in the app
+####
 
 #Make day objects. Copy paste this to initialize:
 	# x = Day(datestamp=date(YYYY,M,D), working_hours = 0)
@@ -107,17 +126,25 @@ class Task(object):
 
 		#properties to be added later
 		self.blocks = []
+		self.calendar_potential_time = 0 #Calculated in task prioritization based on the calendar. Number of working hours between start and end dates
+		self.time_constraint = 0 #Calculated in task prioritization. difference between potential_time and hours_remaining
 
 		#summary properties assigned to Task class
 		Task.allTasks.append(self)
 
 	def __repr__(self):
-		return 'Task{name: %r, project: %r, hours_needed: %r}' % (self.name, self.project, self.hours_needed)
+		return 'Task{name: %r, project: %r, hours_needed: %r, time_constraint: %r, end: %r}\n' % (self.name, self.project, self.hours_needed, self.time_constraint, self.end)
 
 	def clear_blocks(self):
 		self.blocks = []
 
-
+	def hours_remaining(self):
+		
+		if self.completed == True:
+			hours = 0
+		else:
+			hours = self.hours_needed - self.hours_done
+		return hours
 
 class Calendar(object):
 	def __init__(self):
@@ -146,6 +173,15 @@ class Calendar(object):
 
 		return working_hours
 
+	def booked_time(self, start, end):
+		working_hours = 0
+		for d in self.days:
+			if d.datestamp >= start and d.datestamp <= end:
+				working_hours += d.hours_booked()
+
+		return working_hours
+
+		
 # Break a task into blocks, and assign these blocks to the calendar as soon as possible.
 # For each day, if hours_free > block_size, create a block and assign it to that day.
 # For any task time that remains on task.end, add it to the deadline day. This will overbook the day.
@@ -157,15 +193,21 @@ def assign_blocks(task,calendar,start):
 	logging.info("Assigning task {}".format(task.name))
 
 	block_size = 1 #hour(s)
-	hours_to_assign = task.hours_needed - task.hours_done
+	hours_to_assign = task.hours_remaining()
 	hours_assigned = 0
 
-	#This will be incremented when each portion is created.
+	#This will be incremented when each block is created.
 	portion=1
 
 	# if not empty, we assume this has already been run; haven't handled re-running appropriately so we will instead throw an error
 	if len(task.blocks) > 0:
 		raise Exception("task.blocks already populated - don't want to duplicate the blocks")
+	
+	#'Completed' field has precedence over the hours_to_assign amount
+	if task.completed == True:
+
+		logging.info('{} skipped because completed = {}'.format(task.name, task.completed))
+		return
 
 	for d in calendar.days:
 		#Go to the next day if it's not the start date
@@ -188,75 +230,82 @@ def assign_blocks(task,calendar,start):
 			break #no need to look at the rest of the days if everything is assigned
 
 
-	logging.info("{} portions created".format(portion-1))
+	logging.info("{}: {} portions created".format(task.name, (portion-1))) #last increment does not apply to the total portions count
 
 	#handle error - ran out of days in calendar (should add a list at the end of the calendar)
 
 # Takes a list of tasks and sorts the list so that they can be passed through the assign_blocks routine
 # 	Priority:
 #		1) Time constrained - 
-#			hours_available= total working hours available in the calendar between task start and end dates
-#			hours_needed = time remaining in task
+#			Calendar.potential_time(start,end) = total working hours available in the calendar between task start and end dates
+#			Task.hours_remaining = time remaining in task
 #			The smallest (hours_available - hours_needed) get top priority (i.e. must happen on specific days)
 #			
 #		2) end - if time constrained is the same, do the one with the earliest deadline first
 #		3) start - finally, do the one with earliest start date first. 
 def prioritize_tasks(tasks, calendar):
-	return tasks
+	
+	for t in tasks:
+		t.calendar_potential_time = calendar.potential_time(t.start.date(),t.end.date()) #task is datetime. potential_time takes date
+		t.time_constraint = t.calendar_potential_time - t.hours_remaining()
+
+	
+	#Use stable sort property to implement multi-level sort. Lowest priority first.
+	sorted_tasks = sorted(tasks, key=attrgetter('start'))
+	sorted_tasks = sorted(sorted_tasks, key=attrgetter('end'))
+	sorted_tasks = sorted(sorted_tasks, key=attrgetter('time_constraint'))
+
+	#For comparison
+	logging.info('Before sort')
+	logging.info(tasks)
+	logging.info('After sort')
+	logging.info(sorted_tasks)
+
+	return sorted_tasks
 
 #Returns a list of tasks loaded from a data source (CSV file)
 #this will need to load the data from the CSV or other file
 #TODO only sample data creation for now
-def load_tasks(data):
-	
+def load_tasks(data_id):
+	print('Loading Tasks....')
+
+	spreadsheet_date_format='%A, %B %d, %Y'
 
 	#Configure Google Sheets credentials
 	scope = ['https://spreadsheets.google.com/feeds']
 	credentials = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
 
+	#open the notebook
 	gc = gspread.authorize(credentials)
+	notebook = gc.open_by_key(data_id)
 
-	sheetbook = gc.open_by_key('1q7F6Ie2ZGBZ7OsogyHQjMTrHsK27E473zEwRgAfWaEg')
 
-	worksheets = sheetbook.worksheets() #a list of all worksheets in a spreadsheet
-	worksheet = sheetbook.get_worksheet(0) #get worksheet by index number
-	worksheet_count = worksheet.row_count
-	worksheet_headers = worksheet.row_values(1) #returns list of values in a row
+	#worksheets = sheetbook.worksheets() #a list of all worksheets in a spreadsheet
+	#worksheet_count = worksheet.row_count
+	#worksheet_headers = worksheet.row_values(1) #returns list of values in a row
+	
+	worksheet = notebook.get_worksheet(0) #get worksheet by index number
 	worksheet_values = worksheet.get_all_values()
 
+	#Create Task objects for each row
 	row_index = 1
 	tasks = []
 	for row in worksheet_values:
-		#figure out how to parse dates
-		print('date: {}'.format(row[1]))
-
-
+		#skip the headers
 		if row_index == 1:
 			row_index += 1
-			continue #skip the headers
+			continue 
 		task = Task(name = str(row[0]), 
-					start = datetime(2016,9,6,9,30), 		#TODO need to convert to datetime format (parse string)
-					end = datetime(2016,9,8,10,30),
+					start = datetime.strptime(row[1],spreadsheet_date_format),		#TODO need to convert to datetime format (parse string)
+					end = datetime.strptime(row[2],spreadsheet_date_format),
 					hours_needed = float(row[3]), 
 					hours_done = float(row[4]), 
-					completed = bool(row[5]), 
+					completed = str_to_bool(row[5]), 
 					project = str(row[6]), 
 					notes = str(row[7]))
 		
 		tasks.append(task)
 		row_index += 1
-
-
-
-
-	#sample_task = Task(name='My Task', start = datetime(2016,9,6,9,30), end = datetime(2016,9,8,10,30), hours_needed=15, hours_done=0, completed=False, project='Test Project', notes='no notes')
-	#tasks = [sample_task]
-
-	#second_task = Task(name='Second Task', start = datetime(2016,9,7,9,30), end = datetime(2016,9,7,10,30), hours_needed=9, hours_done=0, completed=False, project='Test Project', notes='my note')
-	#tasks.append(second_task)
-
-	#specific_task = Task(name="Specific",start=datetime(2016,9,7,13,0),end=datetime(2016,9,7,14,0),hours_needed=1)
-	#tasks.insert(0,specific_task)
 
 	return tasks
 
@@ -340,20 +389,23 @@ def create_week_september_5():
 def sample():
 	logging.info('------------------------')
 	logging.info('Starting sample() module')
-	print('-----------')
 
-	cal = create_calendar('data/calendar.csv',date(2016,9,5),date(2016,10,11))
-	print(cal)
-	tasks = load_tasks('nodata')
-	tasks = prioritize_tasks(tasks,cal)
+	tasks = load_tasks(data_id='1q7F6Ie2ZGBZ7OsogyHQjMTrHsK27E473zEwRgAfWaEg')
 
-	print(tasks)
-
+	#Create the calendar
+	start = date.today()
+	#initialize end, then set it to the latest end date from task
+	end = date.today()		
 	for t in tasks:
-		assign_blocks(task=t, calendar=cal, start=t.start.date())
+		if t.end.date() > end:
+			end = t.end.date()
+	cal = create_calendar('data/calendar.csv',start,end)
 
-	print("Available time: {}".format(cal.potential_time(date(2016,9,6),date(2016,9,7))))
-	print("Overbooked time: {}".format(cal.overbooked_time(date(2016,9,6),date(2016,9,7))))
+
+	sorted_tasks = prioritize_tasks(tasks,cal)
+
+	for t in sorted_tasks:
+		assign_blocks(task=t, calendar=cal, start=t.start.date())
 
 	return cal
 
