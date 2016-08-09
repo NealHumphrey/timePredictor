@@ -173,15 +173,21 @@ class Calendar(object):
 
 		return working_hours
 
-	def booked_time(self, start, end):
+	def normal_booked_time(self, start, end):
 		working_hours = 0
 		for d in self.days:
 			if d.datestamp >= start and d.datestamp <= end:
-				working_hours += d.hours_booked()
+				working_hours += d.working_hours if (d.hours_booked() > d.working_hours) else d.hours_booked()
 
 		return working_hours
 
-		
+	def working_hours(self, start, end):
+		working_hours = 0
+		for d in self.days:
+			if d.datestamp >= start and d.datestamp <= end:
+				working_hours += d.working_hours
+		return working_hours
+
 # Break a task into blocks, and assign these blocks to the calendar as soon as possible.
 # For each day, if hours_free > block_size, create a block and assign it to that day.
 # For any task time that remains on task.end, add it to the deadline day. This will overbook the day.

@@ -30,6 +30,7 @@
 
 .well {
 	padding:3px;
+	min-height:300px;
 
 	-webkit-box-flex: 1;
     -moz-box-flex: 1;
@@ -43,7 +44,7 @@
 }
 
 .well.vacation {
-	background:rgb(245,245,245);
+	background:rgb(235,235,235);
 }
 .calendar-row{
 	
@@ -54,7 +55,7 @@
 }
 .workblock{
 	width:100%;
-	min-height:50px;
+	min-height:70px;
 	padding:3px;
 	margin: 1px 0px 1px 0px;
 
@@ -116,9 +117,16 @@
 		  			<p class="calendar-duration">{{start.strftime(date_format)}} to {{end.strftime(date_format)}} ({{len(calendar.days)}} days)</p>
 	  				
 	  				<div style="margin-bottom:20px">
-	  						<p class="time-summary">Booked: {{ round(calendar.booked_time(start,end) / 8, 1) }} working days</p>
-		  					<p class="time-summary">Time free: {{ round(calendar.potential_time(start,end) / 8, 1) }} working days</p>
-		  					<p class="time-summary">Overbooked: {{ round(calendar.overbooked_time(start,end) / 8, 1) }} working days</p>
+  						%booked_days = round(calendar.normal_booked_time(start,end) / 8, 1)
+  						%free_days = round(calendar.potential_time(start,end) / 8, 1)
+  						%overbooked_days = round(calendar.overbooked_time(start,end) / 8, 1)
+  						%total_days = round(calendar.working_hours(start,end) / 8, 1)
+  						%percent_booked = round(booked_days / (total_days),2) * 100
+
+	  						<p class="time-summary">Booked: {{(booked_days)}} out of {{(total_days)}} ({{percent_booked}} %)</p>
+		  					<p class="time-summary" style="text-indent: 20px;">plus overbooked: {{ overbooked_days }} days</p>
+		  					<p class="time-summary">Time free: {{free_days}} days</p>
+		  					
 			  		</div>
 
 		  			<div class="calendar-row"><!--the first one-->
@@ -128,7 +136,7 @@
 	  					<div class="well {{well_style}}" style="width:{{width}}%; float:left">
 			  				<div> 
 			  					{{day.datestamp.strftime(date_format)}}.<br>
-			  					{{day.working_hours}} 
+			  					{{day.working_hours}} working
 			  					%free_style = "hours-ok" if day.hours_free() >=0 else "hours-over"
 			  						(<span class="{{free_style}}">
 			  							{{day.hours_free()}} free
