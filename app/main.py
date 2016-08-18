@@ -428,8 +428,8 @@ def slice_calendar(calendar, start, end):
 
 print(__name__)
 if __name__ == '__main__':
-	sample()
-
+	#sample()
+	pass
 		
 
 #example: students = [ Student( score, gender ) for score, gender in <some-data-source> ]

@@ -1,6 +1,6 @@
 branch-defaults:
   master:
-    environment: null
+    environment: timePredictor-dev
     group_suffix: null
 global:
   application_name: timePredictor
