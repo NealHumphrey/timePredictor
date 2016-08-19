@@ -37,7 +37,7 @@ def hello():
 
 #When it's all set up, run the page.
 if __name__ == '__main__':
-    application.run(host='0.0.0.0', debug=True)
+    application.run(host='0.0.0.0')
 
 #Version used for running locally:
 #run(host='localhost', port=8080, debug=True, reloader=True, interval=3)
