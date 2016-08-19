@@ -405,7 +405,7 @@ def sample():
 	for t in tasks:
 		if t.end.date() > end:
 			end = t.end.date()
-	cal = create_calendar('data/calendar.csv',start,end)
+	cal = create_calendar('static/data/calendar.csv',start,end)
 
 
 	sorted_tasks = prioritize_tasks(tasks,cal)

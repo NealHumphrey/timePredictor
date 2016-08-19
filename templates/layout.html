@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+
+		<!--Stuff from external CDNs-->
+		<link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+		<!--backup copies if CDN fails - serve from static folder-->
+		<script>window.jQuery || document.write('<script src="{{url_for('static', filename='jquery.js') }}">\x3C/script>')</script>
+		<script>window.jQuery || document.write('<script src="{{url_for('static', filename='jquery.js') }}">\x3C/script>')</script>
+		<script>window.jQuery || document.write('<script src="{{url_for('static', filename='jquery.js') }}">\x3C/script>')</script>
+
+		<!--variable to the prefix to the root of the application. Pre-pend to resource locations in javascript code-->
+		<script type="text/javascript">	
+		  var $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+		</script>
+	</head>
+	<!--Main body of the content here-->
+	<body>
+		
+			<!--main body-->
+			<div class="container-fluid">
+
+				<div class="row">
+				<div class="col-xs-12 col-sm-12"><!--id="container-sub-wrapper"-->
+
+					{% block content %} {% endblock %}
+				
+				</div>
+				</div>
+			</div>
+
+	</body>
+
+
+</html>
