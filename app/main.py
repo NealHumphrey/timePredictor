@@ -32,7 +32,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 #Configure logging
-logging_filename = "logs/app.log"
+logging_filename = "../logs/app.log"
 logging.basicConfig(filename=logging_filename, level=logging.DEBUG)
 
 ####
