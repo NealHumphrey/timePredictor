@@ -2,6 +2,7 @@
 #Unlike Django and others, there's no database or other full-stack components, making it useful for quick display-based tools.
 
 #Import the stuff we need first:
+import os
 from bottle import route, run, template, view, debug, default_app
 from app.main import sample, slice_calendar
 from datetime import datetime
@@ -35,9 +36,7 @@ def hello():
     return 'Hello World'
 
 
-#When it's all set up, run the page.
-if __name__ == '__main__':
-    application.run(host='0.0.0.0')
+run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
 #Version used for running locally:
 #run(host='localhost', port=8080, debug=True, reloader=True, interval=3)
